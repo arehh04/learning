@@ -27,6 +27,9 @@
 
     <div class="w-2/3">
         @if ($selected)
+            @if ($claimError)
+                <p class="text-red-600 text-sm">{{ $claimError }}</p>
+            @endif
             <div class="space-y-2 mb-4">
                 @foreach ($selected->messages as $message)
                     <div class="{{ $message->direction === 'outbound' ? 'text-right' : 'text-left' }}">

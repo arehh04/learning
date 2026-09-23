@@ -46,6 +46,19 @@ class TelegramWebhookControllerTest extends TestCase
         $this->assertSame(0, WebhookEvent::count());
     }
 
+    public function test_webhook_rejects_requests_when_no_secret_is_configured_and_none_is_provided(): void
+    {
+        config(['services.telegram.webhook_secret' => null]);
+
+        Channel::factory()->create(['type' => 'telegram']);
+
+        $response = $this->postJson('/webhooks/telegram', telegramUpdate());
+
+        $response->assertStatus(403);
+        $this->assertSame(0, Message::count());
+        $this->assertSame(0, WebhookEvent::count());
+    }
+
     public function test_webhook_persists_a_message_when_the_secret_token_is_valid(): void
     {
         Channel::factory()->create(['type' => 'telegram']);
@@ -67,5 +80,29 @@ class TelegramWebhookControllerTest extends TestCase
         $this->postJson('/webhooks/telegram', $payload, ['X-Telegram-Bot-Api-Secret-Token' => 'test-secret']);
 
         $this->assertSame(1, Message::count());
+    }
+
+    public function test_webhook_acknowledges_non_message_updates_without_ingesting(): void
+    {
+        Channel::factory()->create(['type' => 'telegram']);
+
+        $payload = [
+            'update_id' => 902,
+            'edited_message' => [
+                'message_id' => 1,
+                'from' => ['id' => 555, 'first_name' => 'Dana'],
+                'chat' => ['id' => 555, 'type' => 'private'],
+                'date' => 1690000000,
+                'text' => 'Hi there (edited)',
+            ],
+        ];
+
+        $response = $this->postJson('/webhooks/telegram', $payload, [
+            'X-Telegram-Bot-Api-Secret-Token' => 'test-secret',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertSame(0, Message::count());
+        $this->assertSame(0, WebhookEvent::count());
     }
 }

@@ -6,8 +6,10 @@ use App\Exceptions\ConversationAlreadyClaimedException;
 use App\Models\Conversation;
 use App\Services\ClaimService;
 use App\Services\ReplyDispatchService;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 
+#[Layout('layouts.app')]
 class Inbox extends Component
 {
     public ?int $selectedConversationId = null;
@@ -39,9 +41,16 @@ class Inbox extends Component
 
         $conversation = Conversation::findOrFail($this->selectedConversationId);
 
+        if ($conversation->owner_agent_id !== auth()->id()) {
+            $this->claimError = 'You can only reply on conversations you own.';
+
+            return;
+        }
+
         $replyService->send($conversation, auth()->user(), $this->replyBody);
 
         $this->replyBody = '';
+        $this->claimError = null;
     }
 
     public function render()

@@ -17,6 +17,13 @@ class InboxTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_an_authenticated_agent_can_load_the_inbox_page(): void
+    {
+        $agent = User::factory()->create();
+
+        $this->actingAs($agent)->get('/inbox')->assertOk();
+    }
+
     public function test_an_agent_can_claim_an_unassigned_conversation_from_the_inbox(): void
     {
         $agent = User::factory()->create();
@@ -79,6 +86,36 @@ class InboxTest extends TestCase
 
         $this->assertSame(
             1,
+            Message::where('conversation_id', $conversation->id)
+                ->where('direction', Message::DIRECTION_OUTBOUND)
+                ->count()
+        );
+    }
+
+    public function test_an_agent_cannot_send_a_reply_on_a_conversation_they_do_not_own(): void
+    {
+        Queue::fake();
+
+        $owner = User::factory()->create();
+        $otherAgent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_HUMAN,
+            'owner_agent_id' => $owner->id,
+        ]);
+
+        Livewire::actingAs($otherAgent)
+            ->test(Inbox::class)
+            ->call('select', $conversation->id)
+            ->set('replyBody', 'I should not be able to send this.')
+            ->call('sendReply')
+            ->assertSet('claimError', 'You can only reply on conversations you own.');
+
+        $this->assertSame(
+            0,
             Message::where('conversation_id', $conversation->id)
                 ->where('direction', Message::DIRECTION_OUTBOUND)
                 ->count()
