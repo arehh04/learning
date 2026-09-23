@@ -18,45 +18,70 @@
 - Assignment is manual claim only — no auto-assignment/round-robin logic.
 - No Redis. The queue connection is Laravel's `database` driver.
 - No containerization tooling beyond Laravel Sail (official Docker Compose setup) — do not hand-roll custom Dockerfiles.
-- All file paths below are relative to the new Laravel project root created in Task 1 (`C:\Users\HP\Desktop\crm`), not the `learning` repo this plan document lives in.
+- All file paths below are relative to this repo's root (`C:\Users\HP\Desktop\learning`). The Laravel project is built in place here, not in a separate sibling directory — Task 1 was revised to install Laravel directly into this existing git repo (it originally targeted a sibling `crm` folder; that approach was abandoned after repeated environment failures, see the ledger).
+- Sail/Docker commands must be routed through WSL2 (`wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop/learning && <cmd>"`), never plain Git Bash — Git Bash (MINGW64) mis-translates the path/volume arguments Sail's scripts pass to Docker, which caused Task 1's first two attempts to fail.
 
 ---
 
 ### Task 1: Project Initialization with Docker (Laravel Sail + PostgreSQL)
 
+**Revision note:** this task originally targeted a fresh sibling directory
+(`C:\Users\HP\Desktop\crm`) and ran into repeated environment failures on
+Windows/Git Bash (see the ledger for the full account: hand-rolled Docker
+files, HTTP 500, a mid-fix directory deletion). It's revised here to build
+in place inside this repo, and to route every Sail/Docker command through
+WSL2 from the start instead of discovering that mid-task.
+
 **Files:**
-- Create: entire new Laravel project at `C:\Users\HP\Desktop\crm` (via the official installer, not hand-written)
+- Create: a Laravel project's files directly in this repo's root (`C:\Users\HP\Desktop\learning`), via the official installer — not hand-written, and not a subdirectory
 
 **Interfaces:**
 - Consumes: nothing (first task)
-- Produces: a running Laravel app reachable at `http://localhost`, with `./vendor/bin/sail` as the command runner for every subsequent task (`sail artisan`, `sail composer`, `sail npm`, `sail test`)
+- Produces: a running Laravel app reachable at `http://localhost`, with `./vendor/bin/sail` as the command runner for every subsequent task (`sail artisan`, `sail composer`, `sail npm`, `sail test`) — every such command routed through WSL2, see below
 
-- [ ] **Step 1: Create the project via Laravel's official Sail installer**
-
-Run from `C:\Users\HP\Desktop` (parent of both `learning` and the new project):
+- [ ] **Step 1: Start the Ubuntu WSL2 distro**
 
 ```bash
-curl -s "https://laravel.build/crm?with=pgsql" | bash
+wsl -d Ubuntu -- echo ready
+```
+
+- [ ] **Step 2: Create the project via Laravel's official Sail installer, into a temp directory**
+
+Composer's `create-project` refuses a non-empty target, and this repo
+already has `.git`/`docs`/`.superpowers` in it — so install into a throwaway
+sibling directory first, then merge its contents into this repo's root.
+Run via WSL2, not Git Bash:
+
+```bash
+wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop && curl -s 'https://laravel.build/crm-tmp?with=pgsql' | bash"
 ```
 
 This uses a temporary Docker container to run `composer create-project`, so no local PHP/Composer install is required. It generates `docker-compose.yml` pre-configured for PHP + PostgreSQL.
 
-- [ ] **Step 2: Start the containers**
+- [ ] **Step 3: Merge the generated project into this repo's root, then remove the temp directory**
 
 ```bash
-cd C:\Users\HP\Desktop\crm
-./vendor/bin/sail up -d
+cp -a C:/Users/HP/Desktop/crm-tmp/. C:/Users/HP/Desktop/learning/
+rm -rf C:/Users/HP/Desktop/crm-tmp
 ```
 
-- [ ] **Step 3: Verify the app boots**
+(`cp -a ... /.` copies contents including dotfiles like `.env`, `.env.example`, `.gitignore` — it does not create a `.git` here since the installer itself never ran `git init`.)
+
+- [ ] **Step 4: Start the containers**
+
+```bash
+wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop/learning && ./vendor/bin/sail up -d"
+```
+
+- [ ] **Step 5: Verify the app boots**
 
 ```bash
 curl -sI http://localhost | head -n 1
 ```
 
-Expected: `HTTP/1.1 200 OK`.
+Expected: `HTTP/1.1 200 OK`. If it isn't, do not delete and restart — debug in place first (`wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop/learning && ./vendor/bin/sail logs"`, check `storage/logs/laravel.log`), since a prior attempt lost all its work to a premature delete-and-restart.
 
-- [ ] **Step 4: Set the queue connection to database (no Redis)**
+- [ ] **Step 6: Set the queue connection to database (no Redis)**
 
 Open `.env`, confirm (or set):
 
@@ -64,12 +89,11 @@ Open `.env`, confirm (or set):
 QUEUE_CONNECTION=database
 ```
 
-- [ ] **Step 5: Initialize git and commit**
+- [ ] **Step 7: Commit (this repo already has git history — no `git init` needed)**
 
 ```bash
-git init
 git add .
-git commit -m "Initialize Laravel project with Sail + PostgreSQL"
+git commit -m "Initialize Laravel project with Sail + PostgreSQL, built in place"
 ```
 
 ---
