@@ -19,46 +19,41 @@
 - No Redis. The queue connection is Laravel's `database` driver.
 - No containerization tooling beyond Laravel Sail (official Docker Compose setup) — do not hand-roll custom Dockerfiles.
 - All file paths below are relative to this repo's root (`C:\Users\HP\Desktop\learning`). The Laravel project is built in place here, not in a separate sibling directory — Task 1 was revised to install Laravel directly into this existing git repo (it originally targeted a sibling `crm` folder; that approach was abandoned after repeated environment failures, see the ledger).
-- Sail/Docker commands must be routed through WSL2 (`wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop/learning && <cmd>"`), never plain Git Bash — Git Bash (MINGW64) mis-translates the path/volume arguments Sail's scripts pass to Docker, which caused Task 1's first two attempts to fail.
+- Sail/Docker commands must be run from **PowerShell**, never Git Bash — Git Bash (MINGW64) mis-translates the path/volume arguments Sail's scripts pass to Docker, which caused Task 1's first attempt to fail. (A second attempt tried routing through WSL2 instead; that's unnecessary and was abandoned — see the ledger. PowerShell alone avoids the Git Bash bug.)
+- After any container restart (`docker compose down` + `up`, or a Docker Desktop/machine restart), re-run the permission fix in Task 1 Step 5 before assuming file writes work — see the ledger for why.
 
 ---
 
 ### Task 1: Project Initialization with Docker (Laravel Sail + PostgreSQL)
 
-**Revision note:** this task originally targeted a fresh sibling directory
-(`C:\Users\HP\Desktop\crm`) and ran into repeated environment failures on
-Windows/Git Bash (see the ledger for the full account: hand-rolled Docker
-files, HTTP 500, a mid-fix directory deletion). It's revised here to build
-in place inside this repo, and to route every Sail/Docker command through
-WSL2 from the start instead of discovering that mid-task.
+**Revision note:** this task went through three attempts — a sibling-directory
+approach that hand-rolled Docker (rejected) and lost work to a premature
+delete-and-restart, then a WSL2-routing approach that turned out unnecessary
+(Docker Desktop's WSL integration wasn't enabled, and PowerShell alone avoids
+the underlying Git Bash bug anyway). What's documented below is what actually
+worked. Full history in the ledger.
 
 **Files:**
 - Create: a Laravel project's files directly in this repo's root (`C:\Users\HP\Desktop\learning`), via the official installer — not hand-written, and not a subdirectory
 
 **Interfaces:**
 - Consumes: nothing (first task)
-- Produces: a running Laravel app reachable at `http://localhost`, with `./vendor/bin/sail` as the command runner for every subsequent task (`sail artisan`, `sail composer`, `sail npm`, `sail test`) — every such command routed through WSL2, see below
+- Produces: a running Laravel app reachable at `http://localhost`. Note: the generated Sail service is named `laravel.test` (current Sail default), not `app` — use `docker compose exec laravel.test ...` (run from **PowerShell**) for every subsequent task's commands, e.g. `docker compose exec laravel.test bash -c "su sail -c 'php artisan ...'"`.
 
-- [ ] **Step 1: Start the Ubuntu WSL2 distro**
-
-```bash
-wsl -d Ubuntu -- echo ready
-```
-
-- [ ] **Step 2: Create the project via Laravel's official Sail installer, into a temp directory**
+- [ ] **Step 1: Create the project via the official Sail composer image, into a temp directory**
 
 Composer's `create-project` refuses a non-empty target, and this repo
 already has `.git`/`docs`/`.superpowers` in it — so install into a throwaway
-sibling directory first, then merge its contents into this repo's root.
-Run via WSL2, not Git Bash:
+sibling directory first, then merge its contents into this repo's root. Run
+from **PowerShell** (not Git Bash — it mis-translates Docker's path/volume
+arguments):
 
-```bash
-wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop && curl -s 'https://laravel.build/crm-tmp?with=pgsql' | bash"
+```powershell
+Set-Location "C:\Users\HP\Desktop"
+docker run --rm --pull=always -v "${PWD}:/opt" -w /opt laravelsail/php84-composer:latest bash -c "laravel new crm-tmp --no-interaction && cd crm-tmp && composer require laravel/sail --dev && php ./artisan sail:install --with=pgsql --no-interaction"
 ```
 
-This uses a temporary Docker container to run `composer create-project`, so no local PHP/Composer install is required. It generates `docker-compose.yml` pre-configured for PHP + PostgreSQL.
-
-- [ ] **Step 3: Merge the generated project into this repo's root, then remove the temp directory**
+- [ ] **Step 2: Merge the generated project into this repo's root, then remove the temp directory**
 
 ```bash
 cp -a C:/Users/HP/Desktop/crm-tmp/. C:/Users/HP/Desktop/learning/
@@ -67,27 +62,49 @@ rm -rf C:/Users/HP/Desktop/crm-tmp
 
 (`cp -a ... /.` copies contents including dotfiles like `.env`, `.env.example`, `.gitignore` — it does not create a `.git` here since the installer itself never ran `git init`.)
 
-- [ ] **Step 4: Start the containers**
+- [ ] **Step 3: Build and start the containers (PowerShell)**
 
-```bash
-wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop/learning && ./vendor/bin/sail up -d"
+```powershell
+Set-Location "C:\Users\HP\Desktop\learning"
+$env:WWWUSER = "1000"
+$env:WWWGROUP = "1000"
+docker compose up -d
 ```
 
-- [ ] **Step 5: Verify the app boots**
+- [ ] **Step 4: Fix the Windows bind-mount permission issue**
+
+Docker Desktop's Windows bind mount makes `storage/` and `bootstrap/cache/`
+appear owned by `root:root` inside the container, which the non-root `sail`
+user (who runs the app) can't write to — this produces a `tempnam()` 500
+error. Fix it every time containers are (re)started:
+
+```powershell
+docker compose exec -u root laravel.test bash -c "chown -R sail:sail /var/www/html/storage /var/www/html/bootstrap/cache && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache"
+```
+
+- [ ] **Step 5: Run initial migrations and verify the app boots**
+
+```powershell
+docker compose exec laravel.test bash -c "su sail -c 'php artisan migrate --force'"
+```
 
 ```bash
 curl -sI http://localhost | head -n 1
 ```
 
-Expected: `HTTP/1.1 200 OK`. If it isn't, do not delete and restart — debug in place first (`wsl -d Ubuntu -- bash -lc "cd /mnt/c/Users/HP/Desktop/learning && ./vendor/bin/sail logs"`, check `storage/logs/laravel.log`), since a prior attempt lost all its work to a premature delete-and-restart.
+Expected: `HTTP/1.1 200 OK`. If it isn't, debug in place (check
+`docker compose logs laravel.test` and `storage/logs/laravel.log`) —
+do not delete and restart the project; a prior attempt lost all its work
+that way.
 
-- [ ] **Step 6: Set the queue connection to database (no Redis)**
+- [ ] **Step 6: Confirm the queue connection is set to database (no Redis)**
 
-Open `.env`, confirm (or set):
-
+```bash
+grep QUEUE_CONNECTION .env
 ```
-QUEUE_CONNECTION=database
-```
+
+Expected: `QUEUE_CONNECTION=database` (Sail's installer sets this by default
+when no Redis service is requested — nothing to change).
 
 - [ ] **Step 7: Commit (this repo already has git history — no `git init` needed)**
 
