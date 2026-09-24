@@ -25,3 +25,7 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+ngrok.yml
+.ngrok-bin/
+ngrok-out.log
+ngrok-err.log
