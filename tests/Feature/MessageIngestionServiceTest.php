@@ -73,6 +73,7 @@ class MessageIngestionServiceTest extends TestCase
 
     public function test_a_brand_new_contact_starts_a_new_ai_owned_open_conversation(): void
     {
+        config(['services.ai_agent.enabled' => true]);
         Queue::fake();
 
         $channel = Channel::factory()->create();
