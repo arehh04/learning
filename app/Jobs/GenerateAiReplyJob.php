@@ -29,9 +29,12 @@ class GenerateAiReplyJob implements ShouldQueue
     }
 
     /**
-     * Last-resort fail-safe: if all 3 tries are exhausted (e.g. Claude or
-     * Jev down for an extended period), don't leave the conversation
-     * stuck on "ai" forever with nobody notified — hand it to a human.
+     * Last-resort fail-safe: HTTP error responses from Claude or Jev are
+     * caught by the adapters and handed off to a human immediately, on the
+     * first try — they never reach here. This only runs once all 3 tries
+     * are exhausted on an uncaught exception (e.g. a connection failure, or
+     * an unexpected bug), so don't leave the conversation stuck on "ai"
+     * forever with nobody notified — hand it to a human.
      */
     public function failed(Throwable $exception): void
     {

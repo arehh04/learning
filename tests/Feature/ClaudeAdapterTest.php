@@ -68,6 +68,19 @@ class ClaudeAdapterTest extends TestCase
         $adapter->draft($conversation->fresh());
     }
 
+    public function test_draft_throws_when_the_connection_fails(): void
+    {
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('Connection timed out'));
+
+        $conversation = Conversation::factory()->create();
+        Message::factory()->create(['conversation_id' => $conversation->id]);
+
+        $adapter = new ClaudeAdapter('fake-key', 'claude-haiku-4-5-20251001');
+
+        $this->expectException(AiDraftingFailedException::class);
+        $adapter->draft($conversation->fresh());
+    }
+
     public function test_draft_caps_history_to_the_last_20_messages(): void
     {
         Http::fake([

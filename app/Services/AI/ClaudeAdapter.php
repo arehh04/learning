@@ -5,6 +5,7 @@ namespace App\Services\AI;
 use App\Exceptions\AI\AiDraftingFailedException;
 use App\Models\Conversation;
 use App\Models\Message;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class ClaudeAdapter
@@ -33,15 +34,19 @@ class ClaudeAdapter
             ])
             ->all();
 
-        $response = Http::withHeaders([
-            'x-api-key' => $this->apiKey,
-            'anthropic-version' => '2023-06-01',
-        ])->post('https://api.anthropic.com/v1/messages', [
-            'model' => $this->model,
-            'max_tokens' => 1024,
-            'system' => self::SYSTEM_PROMPT,
-            'messages' => $history,
-        ]);
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => $this->apiKey,
+                'anthropic-version' => '2023-06-01',
+            ])->timeout(15)->post('https://api.anthropic.com/v1/messages', [
+                'model' => $this->model,
+                'max_tokens' => 1024,
+                'system' => self::SYSTEM_PROMPT,
+                'messages' => $history,
+            ]);
+        } catch (ConnectionException $e) {
+            throw new AiDraftingFailedException('Claude API connection failed: '.$e->getMessage());
+        }
 
         if (! $response->successful()) {
             throw new AiDraftingFailedException('Claude API request failed: '.$response->body());

@@ -72,6 +72,18 @@ class JevAdapterTest extends TestCase
         $adapter->evaluateConfidence($conversation->fresh(), 'a draft');
     }
 
+    public function test_evaluate_confidence_throws_when_the_connection_fails(): void
+    {
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('Connection timed out'));
+
+        $conversation = Conversation::factory()->create();
+
+        $adapter = new JevAdapter('fake-key');
+
+        $this->expectException(AiConfidenceCheckFailedException::class);
+        $adapter->evaluateConfidence($conversation->fresh(), 'a draft');
+    }
+
     public function test_evaluate_confidence_throws_when_the_noul_field_is_not_numeric(): void
     {
         Http::fake([
