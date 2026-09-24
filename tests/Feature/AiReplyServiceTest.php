@@ -167,4 +167,35 @@ class AiReplyServiceTest extends TestCase
         $conversation->refresh();
         $this->assertSame(Conversation::OWNER_HUMAN, $conversation->owner_type);
     }
+
+    public function test_a_conversation_claimed_by_a_human_mid_flight_discards_the_ai_handoff(): void
+    {
+        Queue::fake();
+
+        $conversation = Conversation::factory()->create(['owner_type' => Conversation::OWNER_AI]);
+        $agent = User::factory()->create();
+
+        Http::fake(function ($request) use ($conversation, $agent) {
+            if (str_contains($request->url(), 'api.anthropic.com')) {
+                // Simulate a human claiming the conversation while Claude's
+                // (slow, real-world) API call was in flight.
+                $conversation->update(['owner_type' => Conversation::OWNER_HUMAN, 'owner_agent_id' => $agent->id]);
+
+                return Http::response(['content' => [['type' => 'text', 'text' => 'a draft nobody will see']]], 200);
+            }
+
+            // Low confidence so the outcome would normally be a handoff()
+            // write, not a send() write.
+            return Http::response(['answers' => ['confident_to_send' => ['type' => 'noul', 'noul' => 0.3]]], 200);
+        });
+
+        $this->service()->handle($conversation);
+
+        $this->assertSame(0, $this->outboundMessages($conversation)->count());
+        Queue::assertNotPushed(SendTelegramReplyJob::class);
+        $this->assertSame(0, HandoffEvent::where('conversation_id', $conversation->id)->count());
+
+        $conversation->refresh();
+        $this->assertSame(Conversation::OWNER_HUMAN, $conversation->owner_type);
+    }
 }
