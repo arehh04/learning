@@ -17,6 +17,7 @@ class Message extends Model
     public const STATUS_PENDING = 'pending';
     public const STATUS_SENT = 'sent';
     public const STATUS_FAILED = 'failed';
+    public const STATUS_DRAFT = 'draft';
 
     protected $fillable = [
         'conversation_id', 'direction', 'sender_type', 'sender_id',

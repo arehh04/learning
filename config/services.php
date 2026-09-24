@@ -40,4 +40,18 @@ return [
         'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
     ],
 
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-haiku-4-5-20251001'),
+    ],
+
+    'typesafe' => [
+        'api_key' => env('TYPESAFE_AI_API_KEY'),
+    ],
+
+    'ai_agent' => [
+        'enabled' => env('AI_AGENT_ENABLED', true),
+        'confidence_threshold' => env('AI_CONFIDENCE_THRESHOLD', 0.7),
+    ],
+
 ];
