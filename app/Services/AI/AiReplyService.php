@@ -21,6 +21,18 @@ class AiReplyService
 
     public function handle(Conversation $conversation): void
     {
+        // Production kill switch: if AI is disabled, hand off immediately
+        // and don't process this conversation any further, even if it's
+        // already ai-owned (a brand-new-conversation-only check in
+        // ConversationRoutingService isn't enough to stop AI from
+        // continuing to reply on conversations it already owns, or on
+        // jobs already queued before the switch was flipped).
+        if (! config('services.ai_agent.enabled')) {
+            $this->handoff($conversation, null, 'ai_disabled');
+
+            return;
+        }
+
         // Cheap early exit: if a human already claimed this conversation
         // before the job even started, don't call any external APIs at all.
         $conversation->refresh();

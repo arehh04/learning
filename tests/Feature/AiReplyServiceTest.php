@@ -37,6 +37,7 @@ class AiReplyServiceTest extends TestCase
 
     public function test_high_confidence_reply_is_sent_and_conversation_stays_ai_owned(): void
     {
+        config(['services.ai_agent.enabled' => true]);
         Queue::fake();
         Http::fake([
             'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'Sure, we can do 50 people.']]], 200),
@@ -60,6 +61,7 @@ class AiReplyServiceTest extends TestCase
 
     public function test_low_confidence_hands_off_with_draft_saved_as_hint(): void
     {
+        config(['services.ai_agent.enabled' => true]);
         Queue::fake();
         Http::fake([
             'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'Not totally sure about this one.']]], 200),
@@ -87,6 +89,7 @@ class AiReplyServiceTest extends TestCase
 
     public function test_claude_failure_hands_off_with_no_draft_message(): void
     {
+        config(['services.ai_agent.enabled' => true]);
         Http::fake([
             'api.anthropic.com/*' => Http::response(['error' => 'overloaded'], 529),
         ]);
@@ -106,6 +109,7 @@ class AiReplyServiceTest extends TestCase
 
     public function test_jev_failure_hands_off_with_draft_still_saved(): void
     {
+        config(['services.ai_agent.enabled' => true]);
         Http::fake([
             'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'a real draft']]], 200),
             'api.typesafe.ai/*' => Http::response(['error' => 'rate limited'], 429),
@@ -129,6 +133,9 @@ class AiReplyServiceTest extends TestCase
 
     public function test_a_conversation_no_longer_owned_by_ai_is_skipped_entirely(): void
     {
+        // Exercise the ownership-check skip path specifically (not the
+        // kill-switch skip path, which is covered by its own test).
+        config(['services.ai_agent.enabled' => true]);
         Http::fake(); // any request at all fails this test's premise
 
         $conversation = Conversation::factory()->create(['owner_type' => Conversation::OWNER_HUMAN]);
@@ -142,6 +149,7 @@ class AiReplyServiceTest extends TestCase
 
     public function test_a_conversation_claimed_by_a_human_mid_flight_discards_the_ai_work(): void
     {
+        config(['services.ai_agent.enabled' => true]);
         Queue::fake();
 
         $conversation = Conversation::factory()->create(['owner_type' => Conversation::OWNER_AI]);
@@ -170,6 +178,7 @@ class AiReplyServiceTest extends TestCase
 
     public function test_a_conversation_claimed_by_a_human_mid_flight_discards_the_ai_handoff(): void
     {
+        config(['services.ai_agent.enabled' => true]);
         Queue::fake();
 
         $conversation = Conversation::factory()->create(['owner_type' => Conversation::OWNER_AI]);
@@ -197,5 +206,25 @@ class AiReplyServiceTest extends TestCase
 
         $conversation->refresh();
         $this->assertSame(Conversation::OWNER_HUMAN, $conversation->owner_type);
+    }
+
+    public function test_disabling_the_ai_agent_hands_off_an_already_ai_owned_conversation(): void
+    {
+        config(['services.ai_agent.enabled' => false]);
+
+        $conversation = Conversation::factory()->create(['owner_type' => Conversation::OWNER_AI]);
+        Message::factory()->create(['conversation_id' => $conversation->id]);
+
+        $this->service()->handle($conversation);
+
+        $conversation->refresh();
+        $this->assertSame(Conversation::OWNER_UNASSIGNED, $conversation->owner_type);
+        $this->assertSame(0, $this->outboundMessages($conversation)->count());
+
+        $handoff = HandoffEvent::where('conversation_id', $conversation->id)->first();
+        $this->assertSame('ai_disabled', $handoff->reason);
+        $this->assertSame(Conversation::OWNER_AI, $handoff->from_owner_type);
+
+        Http::assertNothingSent();
     }
 }
