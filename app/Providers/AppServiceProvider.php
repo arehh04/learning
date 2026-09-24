@@ -14,6 +14,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\Channels\TelegramAdapter::class, function () {
             return new \App\Services\Channels\TelegramAdapter(config('services.telegram.bot_token'));
         });
+
+        $this->app->bind(\App\Services\AI\ClaudeAdapter::class, function () {
+            return new \App\Services\AI\ClaudeAdapter(
+                config('services.anthropic.api_key'),
+                config('services.anthropic.model'),
+            );
+        });
     }
 
     /**
