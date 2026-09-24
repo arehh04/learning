@@ -64,6 +64,46 @@ class InboxTest extends TestCase
             ->assertSet('claimError', 'Someone already claimed this conversation.');
     }
 
+    public function test_an_agent_can_take_over_an_ai_handling_conversation_from_the_inbox(): void
+    {
+        $agent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_AI,
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(Inbox::class)
+            ->call('takeOver', $conversation->id)
+            ->assertSet('claimError', null);
+
+        $conversation->refresh();
+        $this->assertSame(Conversation::OWNER_HUMAN, $conversation->owner_type);
+        $this->assertSame($agent->id, $conversation->owner_agent_id);
+    }
+
+    public function test_taking_over_a_conversation_no_longer_owned_by_ai_sets_claim_error(): void
+    {
+        $firstAgent = User::factory()->create();
+        $secondAgent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_HUMAN,
+            'owner_agent_id' => $firstAgent->id,
+        ]);
+
+        Livewire::actingAs($secondAgent)
+            ->test(Inbox::class)
+            ->call('takeOver', $conversation->id)
+            ->assertSet('claimError', 'This conversation is no longer being handled by the AI.');
+    }
+
     public function test_an_agent_can_send_a_reply_on_a_conversation_they_own(): void
     {
         Queue::fake();

@@ -38,6 +38,20 @@ class Inbox extends Component
         }
     }
 
+    public function takeOver(int $conversationId, ClaimService $claimService): void
+    {
+        $conversation = Conversation::findOrFail($conversationId);
+
+        try {
+            $claimService->takeOver($conversation, auth()->user());
+            $this->selectedConversationId = $conversationId;
+            $this->claimError = null;
+            $this->prefillDraftReply($conversationId);
+        } catch (ConversationAlreadyClaimedException $e) {
+            $this->claimError = 'This conversation is no longer being handled by the AI.';
+        }
+    }
+
     private function prefillDraftReply(int $conversationId): void
     {
         $latestDraft = Message::where('conversation_id', $conversationId)
@@ -82,6 +96,10 @@ class Inbox extends Component
     {
         return view('livewire.inbox', [
             'unassigned' => Conversation::where('owner_type', Conversation::OWNER_UNASSIGNED)
+                ->with('contact')
+                ->latest('last_inbound_at')
+                ->get(),
+            'aiHandling' => Conversation::where('owner_type', Conversation::OWNER_AI)
                 ->with('contact')
                 ->latest('last_inbound_at')
                 ->get(),

@@ -16,6 +16,21 @@
         </div>
 
         <div>
+            <h2 class="font-bold">AI Handling</h2>
+            @if ($claimError)
+                <p class="text-red-600 text-sm">{{ $claimError }}</p>
+            @endif
+            @foreach ($aiHandling as $conversation)
+                <div class="border p-2 flex justify-between items-center">
+                    <span wire:click="select({{ $conversation->id }})" class="cursor-pointer">
+                        {{ $conversation->contact->name ?? $conversation->contact->external_contact_id }}
+                    </span>
+                    <button wire:click="takeOver({{ $conversation->id }})" class="text-sm text-white bg-red-600 hover:bg-red-700 px-2 py-1 rounded font-semibold">Take Over</button>
+                </div>
+            @endforeach
+        </div>
+
+        <div>
             <h2 class="font-bold">Mine</h2>
             @foreach ($mine as $conversation)
                 <div wire:click="select({{ $conversation->id }})" class="border p-2 cursor-pointer">
