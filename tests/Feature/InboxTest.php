@@ -121,4 +121,104 @@ class InboxTest extends TestCase
                 ->count()
         );
     }
+
+    public function test_selecting_a_conversation_with_a_draft_prefills_the_reply_box(): void
+    {
+        $agent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_UNASSIGNED,
+        ]);
+        Message::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => Message::DIRECTION_OUTBOUND,
+            'sender_type' => 'ai',
+            'status' => Message::STATUS_DRAFT,
+            'body' => 'Here is a suggested reply from the AI.',
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(Inbox::class)
+            ->call('select', $conversation->id)
+            ->assertSet('replyBody', 'Here is a suggested reply from the AI.');
+    }
+
+    public function test_selecting_a_conversation_without_a_draft_leaves_the_reply_box_blank(): void
+    {
+        $agent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_UNASSIGNED,
+        ]);
+        Message::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => Message::DIRECTION_INBOUND,
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(Inbox::class)
+            ->call('select', $conversation->id)
+            ->assertSet('replyBody', '');
+    }
+
+    public function test_selecting_a_conversation_with_multiple_drafts_prefills_the_most_recent_one(): void
+    {
+        $agent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_UNASSIGNED,
+        ]);
+        Message::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => Message::DIRECTION_OUTBOUND,
+            'sender_type' => 'ai',
+            'status' => Message::STATUS_DRAFT,
+            'body' => 'first rejected draft',
+        ]);
+        Message::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => Message::DIRECTION_OUTBOUND,
+            'sender_type' => 'ai',
+            'status' => Message::STATUS_DRAFT,
+            'body' => 'second, more recent rejected draft',
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(Inbox::class)
+            ->call('select', $conversation->id)
+            ->assertSet('replyBody', 'second, more recent rejected draft');
+    }
+
+    public function test_claiming_a_conversation_with_a_draft_prefills_the_reply_box(): void
+    {
+        $agent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_UNASSIGNED,
+        ]);
+        Message::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => Message::DIRECTION_OUTBOUND,
+            'sender_type' => 'ai',
+            'status' => Message::STATUS_DRAFT,
+            'body' => 'AI suggested reply',
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(Inbox::class)
+            ->call('claim', $conversation->id)
+            ->assertSet('replyBody', 'AI suggested reply');
+    }
 }

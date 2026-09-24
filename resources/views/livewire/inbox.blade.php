@@ -33,7 +33,12 @@
             <div class="space-y-2 mb-4">
                 @foreach ($selected->messages as $message)
                     <div class="{{ $message->direction === 'outbound' ? 'text-right' : 'text-left' }}">
-                        <span class="inline-block border rounded p-2">{{ $message->body }}</span>
+                        <span class="inline-block border rounded p-2 {{ $message->status === 'draft' ? 'border-dashed border-yellow-500 bg-yellow-50' : '' }}">
+                            {{ $message->body }}
+                            @if ($message->status === 'draft')
+                                <span class="block text-xs text-yellow-600">AI draft (not sent)</span>
+                            @endif
+                        </span>
                     </div>
                 @endforeach
             </div>
