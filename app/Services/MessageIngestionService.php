@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\GenerateAiReplyJob;
 use App\Models\Channel;
 use App\Models\Contact;
 use App\Models\Conversation;
@@ -20,7 +21,9 @@ class MessageIngestionService
 
     public function ingest(Channel $channel, ParsedInboundMessage $parsed): ?Message
     {
-        return DB::transaction(function () use ($channel, $parsed) {
+        $conversation = null;
+
+        $message = DB::transaction(function () use ($channel, $parsed, &$conversation) {
             if (! $this->recordWebhookEvent($channel, $parsed)) {
                 return null; // duplicate delivery — already processed
             }
@@ -38,6 +41,12 @@ class MessageIngestionService
                 'raw_payload' => $parsed->rawPayload,
             ]);
         });
+
+        if ($message !== null && $conversation->owner_type === Conversation::OWNER_AI) {
+            GenerateAiReplyJob::dispatch($conversation->id);
+        }
+
+        return $message;
     }
 
     /**

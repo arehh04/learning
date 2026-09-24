@@ -9,6 +9,7 @@ use App\Models\Message;
 use App\Services\Channels\TelegramAdapter;
 use App\Services\MessageIngestionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 function ingestionPayload(int $updateId, int $chatId = 42, string $text = 'Hi'): array
@@ -70,8 +71,10 @@ class MessageIngestionServiceTest extends TestCase
         $this->assertNull($conversation->closed_at);
     }
 
-    public function test_a_brand_new_contact_starts_a_new_unassigned_open_conversation(): void
+    public function test_a_brand_new_contact_starts_a_new_ai_owned_open_conversation(): void
     {
+        Queue::fake();
+
         $channel = Channel::factory()->create();
         $adapter = new TelegramAdapter('fake-token');
         $service = app(MessageIngestionService::class);
@@ -81,7 +84,28 @@ class MessageIngestionServiceTest extends TestCase
         $service->ingest($channel, $parsed);
 
         $conversation = Conversation::first();
-        $this->assertSame(Conversation::OWNER_UNASSIGNED, $conversation->owner_type);
+        $this->assertSame(Conversation::OWNER_AI, $conversation->owner_type);
         $this->assertSame(Conversation::STATUS_OPEN, $conversation->status);
+
+        Queue::assertPushed(\App\Jobs\GenerateAiReplyJob::class);
+    }
+
+    public function test_disabling_the_ai_agent_routes_new_conversations_to_unassigned(): void
+    {
+        config(['services.ai_agent.enabled' => false]);
+        Queue::fake();
+
+        $channel = Channel::factory()->create();
+        $adapter = new TelegramAdapter('fake-token');
+        $service = app(MessageIngestionService::class);
+
+        $parsed = $adapter->parseInbound(ingestionPayload(334, chatId: 78, text: 'Hello'));
+
+        $service->ingest($channel, $parsed);
+
+        $conversation = Conversation::first();
+        $this->assertSame(Conversation::OWNER_UNASSIGNED, $conversation->owner_type);
+
+        Queue::assertNotPushed(\App\Jobs\GenerateAiReplyJob::class);
     }
 }
