@@ -198,6 +198,37 @@ class InboxTest extends TestCase
             ->assertSet('replyBody', 'second, more recent rejected draft');
     }
 
+    public function test_selecting_a_conversation_with_a_draft_superseded_by_a_real_reply_leaves_the_reply_box_blank(): void
+    {
+        $agent = User::factory()->create();
+        $channel = Channel::factory()->create();
+        $contact = Contact::factory()->create(['channel_id' => $channel->id]);
+        $conversation = Conversation::factory()->create([
+            'contact_id' => $contact->id,
+            'channel_id' => $channel->id,
+            'owner_type' => Conversation::OWNER_UNASSIGNED,
+        ]);
+        Message::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => Message::DIRECTION_OUTBOUND,
+            'sender_type' => 'ai',
+            'status' => Message::STATUS_DRAFT,
+            'body' => 'stale AI draft that was rejected',
+        ]);
+        Message::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => Message::DIRECTION_OUTBOUND,
+            'sender_type' => 'agent',
+            'status' => Message::STATUS_PENDING,
+            'body' => 'the real reply the agent actually sent',
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(Inbox::class)
+            ->call('select', $conversation->id)
+            ->assertSet('replyBody', '');
+    }
+
     public function test_claiming_a_conversation_with_a_draft_prefills_the_reply_box(): void
     {
         $agent = User::factory()->create();

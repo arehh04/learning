@@ -45,7 +45,19 @@ class Inbox extends Component
             ->latest('id')
             ->first();
 
-        $this->replyBody = $latestDraft?->body ?? '';
+        if ($latestDraft === null) {
+            $this->replyBody = '';
+
+            return;
+        }
+
+        $supersededByRealReply = Message::where('conversation_id', $conversationId)
+            ->where('direction', Message::DIRECTION_OUTBOUND)
+            ->where('status', '!=', Message::STATUS_DRAFT)
+            ->where('id', '>', $latestDraft->id)
+            ->exists();
+
+        $this->replyBody = $supersededByRealReply ? '' : $latestDraft->body;
     }
 
     public function sendReply(ReplyDispatchService $replyService): void
