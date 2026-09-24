@@ -25,6 +25,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\AI\JevAdapter::class, function () {
             return new \App\Services\AI\JevAdapter(config('services.typesafe.api_key'));
         });
+
+        $this->app->bind(\App\Services\AI\AiReplyService::class, function ($app) {
+            return new \App\Services\AI\AiReplyService(
+                $app->make(\App\Services\AI\ClaudeAdapter::class),
+                $app->make(\App\Services\AI\JevAdapter::class),
+                (float) config('services.ai_agent.confidence_threshold'),
+            );
+        });
     }
 
     /**
