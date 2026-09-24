@@ -21,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
                 config('services.anthropic.model'),
             );
         });
+
+        $this->app->bind(\App\Services\AI\JevAdapter::class, function () {
+            return new \App\Services\AI\JevAdapter(config('services.typesafe.api_key'));
+        });
     }
 
     /**
